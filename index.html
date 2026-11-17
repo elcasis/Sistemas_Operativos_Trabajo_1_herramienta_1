@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planificador de Procesos y Colas de Prioridad — Sistemas Operativos</title>
+  <!-- Librería html2canvas para exportar el folio a imagen PNG de alta resolución -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <style>
+    :root {
+      --bg-body: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-alt: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #475569;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --danger: #ef4444;
+      --success: #10b981;
+      /* Ancho estándar de un folio A4 apaisado en pantalla (297mm @ 96dpi ≈ 1122px) */
+      --folio-width: 1122px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      line-height: 1.45;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: var(--bg-card);
+      padding: 16px 22px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    header h1 span.badge {
+      background: var(--accent);
+      font-size: 0.72rem;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .panel-title {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* Formulario de configuración */
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 14px;
+      align-items: end;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .form-group label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    .form-group input,
+    .form-group select {
+      background: var(--bg-body);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+    .btn-success:hover {
+      background: #059669;
+    }
+
+    .btn-secondary {
+      background: var(--bg-card-alt);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+    .btn-secondary:hover {
+      background: #475569;
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+    .btn-danger:hover {
+      background: var(--danger);
+      color: white;
+    }
+
+    /* Paleta de estados / colores */
+    .palette-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .swatches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .swatch-btn {
+      background: var(--bg-body);
+      border: 2px solid var(--border-color);
+      color: var(--text-main);
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .swatch-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .swatch-btn.active {
+      border-color: #ffffff;
+      box-shadow: 0 0 0 2px var(--accent);
+      background: var(--bg-card-alt);
+    }
+
+    .swatch-color {
+      width: 17px;
+      height: 17px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 0, 0, 0.35);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.68rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .tools-right {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .io-letter-box {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #172554;
+      border: 1px solid #3b82f6;
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      color: #dbeafe;
+      font-weight: 600;
+    }
+
+    .io-letter-box input {
+      width: 42px;
+      background: #0f172a;
+      border: 1px solid #60a5fa;
+      color: #ffffff;
+      font-weight: 800;
+      text-align: center;
+      text-transform: uppercase;
+      padding: 3px 4px;
+      border-radius: 5px;
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    .custom-color-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-body);
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .custom-color-box input[type="color"] {
+      width: 26px;
+      height: 26px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .custom-color-box input[type="text"] {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-main);
+      width: 85px;
+      font-size: 0.8rem;
+      padding: 2px 4px;
+      outline: none;
+    }
+
+    /* Contenedor exterior que centra el Folio A4 en la pantalla */
+    .workspace-wrapper {
+      background: #0b1120;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+    }
+
+    /* Hoja tamaño Folio A4 donde la tabla siempre se ajusta al 100% del ancho */
+    #export-area {
+      background: #ffffff;
+      color: #0f172a;
+      width: 100%;
+      max-width: var(--folio-width);
+      min-width: 780px;
+      padding: 22px 24px;
+      border-radius: 6px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sheet-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #cbd5e1;
+    }
+
+    .sheet-title-block h2 {
+      font-size: 1.15rem;
+      color: #0f172a;
+      font-weight: 800;
+    }
+
+    .sheet-title-block p {
+      font-size: 0.8rem;
+      color: #475569;
+      margin-top: 2px;
+    }
+
+    .sheet-badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .meta-pill {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      color: #1e293b;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .meta-pill span.val {
+      color: #2563eb;
+      font-weight: 800;
+    }
+
+    /* Tabla ajustada al 100% del ancho del folio sin desbordar */
+    .sched-table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      user-select: none;
+    }
+
+    .sched-table th,
+    .sched-table td {
+      border: 1px solid #94a3b8;
+      text-align: center;
+      vertical-align: middle;
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .sched-table thead th {
+      background: #1e293b;
+      color: #ffffff;
+      font-weight: 700;
+      height: 28px;
+      font-size: var(--th-font-size, 0.72rem);
+      line-height: 1;
+    }
+
+    /* Anchos fijos reducidos para las columnas de identificación, el resto se reparte equitativamente en el folio */
+    .sched-table thead th.sticky-col,
+    .sched-table tbody td.row-label-cell {
+      width: 108px;
+    }
+
+    .sched-table thead th.meta-col,
+    .sched-table tbody td.meta-cell {
+      width: 44px;
+    }
+
+    .sched-table thead th.sticky-col {
+      text-align: left;
+      padding-left: 8px;
+      background: #0f172a;
+      font-size: 0.74rem;
+    }
+
+    .sched-table thead th.meta-col {
+      background: #334155;
+      font-size: 0.66rem;
+    }
+
+    /* Separación visual cada múltiplo de Cuanto (Quantum) */
+    .sched-table th.quantum-divider,
+    .sched-table td.quantum-divider {
+      border-right: 2.2px solid #0f172a !important;
+    }
+
+    /* Filas de Procesos vs Recursos E/S vs Cola */
+    .row-label-cell {
+      background: #f8fafc;
+      font-weight: 700;
+      color: #0f172a;
+      text-align: left !important;
+      padding: 2px 6px !important;
+      white-space: nowrap;
+      font-size: 0.76rem;
+    }
+
+    .row-io .row-label-cell {
+      background: #fffbeb;
+      color: #92400e;
+    }
+
+    .row-queue .row-label-cell {
+      background: #eef2ff;
+      color: #3730a3;
+    }
+
+    .row-section-divider td {
+      background: #e2e8f0;
+      color: #334155;
+      font-weight: 800;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: left !important;
+      padding: 3px 8px !important;
+    }
+
+    .editable-label {
+      border: 1px dashed transparent;
+      padding: 1px 3px;
+      border-radius: 3px;
+      outline: none;
+      display: inline-block;
+      max-width: 82px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .editable-label:hover,
+    .editable-label:focus {
+      border-color: #64748b;
+      background: #ffffff;
+    }
+
+    .meta-input {
+      width: 100%;
+      border: none;
+      background: transparent;
+      text-align: center;
+      font-weight: 700;
+      color: #1e293b;
+      font-size: 0.74rem;
+      padding: 2px 0;
+    }
+
+    .meta-input:hover,
+    .meta-input:focus {
+      background: #f1f5f9;
+      outline: none;
+    }
+
+    /* Celdas de tiempo que se adaptan al ancho del folio */
+    .time-cell {
+      height: var(--row-height, 28px);
+      cursor: crosshair;
+      position: relative;
+      transition: filter 0.08s;
+      font-weight: 800;
+      font-size: var(--cell-font-size, 0.7rem);
+      color: #0f172a;
+      outline: none;
+    }
+
+    .time-cell:hover,
+    .time-cell:focus {
+      filter: brightness(0.92);
+      outline: 2px solid #2563eb;
+      z-index: 2;
+    }
+
+    /* Celdas de fila de Cola de Listos / Prioridades */
+    .queue-cell {
+      height: var(--row-height, 26px);
+      background: #f8fafc;
+      font-size: var(--cell-font-size, 0.68rem);
+      font-weight: 700;
+      color: #1e293b;
+      outline: none;
+      cursor: text;
+    }
+
+    .queue-cell:focus {
+      background: #e0e7ff;
+      outline: 2px solid #4f46e5;
+    }
+
+    /* Leyenda inferior dentro del folio */
+    .sheet-legend {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .legend-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .legend-box {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, 0.35);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      font-weight: 800;
+    }
+
+    .help-tip {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+      header, .panel {
+        display: none !important;
+      }
+      .workspace-wrapper {
+        padding: 0;
+        border: none;
+        background: #ffffff;
+      }
+      #export-area {
+        box-shadow: none;
+        max-width: 100%;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>
+        📊 Planificador de Colas de Prioridad y Procesos
+        <span class="badge">Ajuste a Folio (Máx 60 col)</span>
+      </h1>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="addProcessRow()" title="Añadir un proceso más">
+          ➕ Proceso
+        </button>
+        <button class="btn-secondary" onclick="addIORow()" title="Añadir fila de Recurso E/S">
+          💾 + Recurso E/S
+        </button>
+        <button class="btn-secondary" onclick="addQueueRow()" title="Añadir fila para escribir el estado de la Cola">
+          📋 + Fila Cola Listos
+        </button>
+        <button class="btn-danger" onclick="clearCellsOnly()" title="Limpiar solo los colores pintados">
+          🧹 Limpiar Celdas
+        </button>
+        <button class="btn-success" onclick="exportToImage()">
+          📸 Exportar Folio a Imagen (PNG)
+        </button>
+      </div>
+    </header>
+
+    <!-- Panel 1: Parámetros del Ejercicio -->
+    <section class="panel">
+      <div class="panel-title">
+        <span>⚙️ 1. Configuración del Ejercicio (Ajuste automático al ancho del folio)</span>
+        <span style="font-size: 0.78rem; font-weight: 400;">Máximo 60 columnas de tiempo en ms</span>
+      </div>
+      <div class="config-grid">
+        <div class="form-group">
+          <label for="exerciseTitle">Título / Algoritmo</label>
+          <input type="text" id="exerciseTitle" value="Ejercicio: Colas de Prioridad / Round Robin" oninput="updateHeaderInfo()" />
+        </div>
+
+        <div class="form-group">
+          <label for="numProcesses">Nº Procesos (A, B, C...)</label>
+          <input type="number" id="numProcesses" min="1" max="26" value="4" />
+        </div>
+
+        <div class="form-group">
+          <label for="numColumns">Columnas Tiempo (Máx 60)</label>
+          <input type="number" id="numColumns" min="1" max="60" value="30" oninput="clampColumnsInput(this)" />
+        </div>
+
+        <div class="form-group">
+          <label for="timeStep">Escala (ms por columna)</label>
+          <input type="number" id="timeStep" min="1" max="1000" value="1" oninput="updateTimeHeaders()" />
+        </div>
+
+        <div class="form-group">
+          <label for="quantumVal">Cuanto (Quantum Q)</label>
+          <input type="number" id="quantumVal" min="0" max="60" value="4" placeholder="0 = Sin cuanto" oninput="updateQuantumVisuals()" />
+        </div>
+
+        <div class="form-group">
+          <label for="numIO">Filas de Recurso E/S</label>
+          <input type="number" id="numIO" min="0" max="10" value="1" />
+        </div>
+
+        <div class="form-group">
+          <label for="showMetaCols">Prioridad / Llegada</label>
+          <select id="showMetaCols" onchange="toggleMetaColumns()">
+            <option value="yes" selected>Mostrar (Prio / Lleg)</option>
+            <option value="no">Ocultar (Más espacio)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <button class="btn-primary" onclick="generateNewGrid()" style="width: 100%; justify-content: center; height: 38px;">
+            🔄 Generar Cuadrícula
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Panel 2: Paleta de Estados Predefinidos -->
+    <section class="panel">
+      <div class="panel-title">
+        <span>🎨 2. Paleta de Estados y Letra de Recurso E/S</span>
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#cbd5e1; cursor:pointer; text-transform:none;">
+          <input type="checkbox" id="showCellLetters" checked onchange="toggleCellTextVisibility()" />
+          Mostrar sigla / letra dentro de las celdas
+        </label>
+      </div>
+
+      <div class="palette-bar">
+        <div class="swatches" id="swatchContainer"></div>
+
+        <div class="tools-right">
+          <div class="io-letter-box" title="Al pintar en una fila de Recurso E/S o pulsar una tecla encima de una celda de E/S se pondrá la letra del proceso que lo ocupa">
+            <span>💾 Letra en E/S:</span>
+            <input type="text" id="ioProcessLetter" value="A" maxlength="3" placeholder="A" />
+          </div>
+
+          <div class="custom-color-box" title="Configura un color personalizado">
+            <input type="color" id="customColorPicker" value="#ec4899" onchange="selectCustomBrush()" />
+            <input type="text" id="customColorLabel" value="Especial" placeholder="Etiqueta" oninput="selectCustomBrush()" />
+            <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.78rem;" onclick="selectCustomBrush()">
+              Usar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="help-tip">
+        <span>⌨️ <b>Escribir letra en Recurso E/S:</b> Pon el ratón o haz clic en cualquier celda de <b>Recurso E/S</b> y pulsa cualquier letra (<kbd>A</kbd>, <kbd>B</kbd>, <kbd>C</kbd>...) en tu teclado</span>
+        <span>🖱️ <b>Pintar arrastrando en E/S:</b> Usa la casilla <b>«Letra en E/S»</b> para pintar varias celdas seguidas con esa letra</span>
+        <span>🖱️ <b>Clic derecho o <kbd>Supr</kbd>:</b> Borrar celda</span>
+      </div>
+    </section>
+
+    <!-- Panel 3: Folio A4 con Cuadrícula Ajustada -->
+    <div class="workspace-wrapper">
+      <div id="export-area">
+        <div class="sheet-header">
+          <div class="sheet-title-block">
+            <h2 id="sheetTitleDisplay">Ejercicio: Colas de Prioridad / Round Robin</h2>
+            <p id="sheetSubtitleDisplay">Diagrama de cronograma de procesos y recursos E/S (Tiempo en milisegundos)</p>
+          </div>
+          <div class="sheet-badges">
+            <div class="meta-pill" id="quantumBadge">
+              ⏱️ Cuanto: <span class="val" id="quantumBadgeVal">Q = 4 ms</span>
+            </div>
+            <div class="meta-pill">
+              📐 Escala: <span class="val" id="scaleBadgeVal">1 ms / celda</span>
+            </div>
+          </div>
+        </div>
+
+        <table class="sched-table" id="schedTable">
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+
+        <div class="sheet-legend">
+          <div class="legend-items" id="legendContainer"></div>
+          <div style="font-size: 0.74rem; color: #64748b; font-weight: 600;">
+            Sistemas Operativos — Cronograma ajustado a Folio
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const MAX_COLUMNS = 60;
+
+    const PRESET_STATES = [
+      { id: 'exec',    name: 'Ejecución (CPU)',      short: 'E',   color: '#22c55e', textColor: '#052e16' },
+      { id: 'ready',   name: 'Listo / Espera',       short: 'L',   color: '#facc15', textColor: '#422006' },
+      { id: 'io',      name: 'Uso Recurso E/S',      short: 'E/S', color: '#3b82f6', textColor: '#eff6ff' },
+      { id: 'block',   name: 'Bloqueado E/S',        short: 'B',   color: '#f97316', textColor: '#431407' },
+      { id: 'preempt', name: 'Expulsión / Cambio Q', short: 'X',   color: '#a855f7', textColor: '#faf5ff' },
+      { id: 'arrive',  name: 'Llegada / Fin',        short: '↓',   color: '#06b6d4', textColor: '#083344' },
+      { id: 'erase',   name: 'Borrador (Vacío)',     short: '',    color: '#ffffff', textColor: '#0f172a', isEraser: true }
+    ];
+
+    let activeBrush = PRESET_STATES[0];
+    let isMouseDown = false;
+    let paintMode = 'paint';
+    let rowsData = [];
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderPalette();
+      renderLegend();
+      generateNewGrid();
+
+      document.addEventListener('mouseup', () => {
+        isMouseDown = false;
+      });
+    });
+
+    function clampColumnsInput(inputEl) {
+      let val = parseInt(inputEl.value, 10);
+      if (val > MAX_COLUMNS) {
+        inputEl.value = MAX_COLUMNS;
+      } else if (val < 1) {
+        inputEl.value = 1;
+      }
+      renderTable();
+    }
+
+    function getSanitizedColumns() {
+      const inp = document.getElementById('numColumns');
+      let val = parseInt(inp.value, 10) || 30;
+      val = Math.min(MAX_COLUMNS, Math.max(1, val));
+      inp.value = val;
+      return val;
+    }
+
+    function renderPalette() {
+      const container = document.getElementById('swatchContainer');
+      container.innerHTML = '';
+
+      PRESET_STATES.forEach((st) => {
+        const btn = document.createElement('button');
+        btn.className = 'swatch-btn' + (activeBrush.id === st.id ? ' active' : '');
+        btn.onclick = () => {
+          activeBrush = st;
+          renderPalette();
+        };
+
+        const box = document.createElement('span');
+        box.className = 'swatch-color';
+        box.style.backgroundColor = st.color;
+        box.style.color = st.textColor;
+        box.textContent = st.short;
+
+        const lbl = document.createElement('span');
+        lbl.textContent = st.name;
+
+        btn.appendChild(box);
+        btn.appendChild(lbl);
+        container.appendChild(btn);
+      });
+    }
+
+    function selectCustomBrush() {
+      const color = document.getElementById('customColorPicker').value;
+      const label = document.getElementById('customColorLabel').value.trim() || 'Custom';
+      const short = label.substring(0, 2).toUpperCase();
+
+      activeBrush = {
+        id: 'custom',
+        name: label,
+        short: short,
+        color: color,
+        textColor: getContrastYIQ(color),
+        isEraser: false
+      };
+
+      document.querySelectorAll('.swatch-btn').forEach(b => b.classList.remove('active'));
+    }
+
+    function getContrastYIQ(hexcolor) {
+      const hex = hexcolor.replace('#', '');
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+      return (yiq >= 145) ? '#0f172a' : '#ffffff';
+    }
+
+    function renderLegend() {
+      const legend = document.getElementById('legendContainer');
+      legend.innerHTML = '';
+      PRESET_STATES.filter(s => !s.isEraser).forEach(st => {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+
+        const box = document.createElement('span');
+        box.className = 'legend-box';
+        box.style.backgroundColor = st.color;
+        box.style.color = st.textColor;
+        box.textContent = st.short;
+
+        const txt = document.createElement('span');
+        txt.textContent = st.name;
+
+        item.appendChild(box);
+        item.appendChild(txt);
+        legend.appendChild(item);
+      });
+    }
+
+    function getAlphabetLabel(index) {
+      let label = '';
+      let n = index;
+      while (n >= 0) {
+        label = String.fromCharCode((n % 26) + 65) + label;
+        n = Math.floor(n / 26) - 1;
+      }
+      return `Proceso ${label}`;
+    }
+
+    function createEmptyCells(numCols) {
+      const arr = [];
+      for (let c = 0; c < numCols; c++) {
+        arr.push({ color: '', short: '', textColor: '#0f172a', text: '' });
+      }
+      return arr;
+    }
+
+    function generateNewGrid() {
+      const numProcs = Math.max(1, parseInt(document.getElementById('numProcesses').value, 10) || 4);
+      const numCols = getSanitizedColumns();
+      const numIO = Math.max(0, parseInt(document.getElementById('numIO').value, 10) || 0);
+
+      rowsData = [];
+
+      for (let i = 0; i < numProcs; i++) {
+        rowsData.push({
+          id: 'proc_' + i + '_' + Date.now(),
+          type: 'process',
+          label: getAlphabetLabel(i),
+          priority: i + 1,
+          arrival: 0,
+          cells: createEmptyCells(MAX_COLUMNS)
+        });
+      }
+
+      for (let j = 0; j < numIO; j++) {
+        rowsData.push({
+          id: 'io_' + j + '_' + Date.now(),
+          type: 'io',
+          label: numIO === 1 ? 'Recurso E/S' : `Recurso E/S ${j + 1}`,
+          priority: '-',
+          arrival: '-',
+          cells: createEmptyCells(MAX_COLUMNS)
+        });
+      }
+
+      rowsData.push({
+        id: 'queue_0_' + Date.now(),
+        type: 'queue',
+        label: 'Cola de Listos',
+        priority: '-',
+        arrival: '-',
+        cells: createEmptyCells(MAX_COLUMNS)
+      });
+
+      renderTable();
+      updateHeaderInfo();
+    }
+
+    function adjustFolioSizing(numCols) {
+      const table = document.getElementById('schedTable');
+      if (numCols <= 25) {
+        table.style.setProperty('--th-font-size', '0.74rem');
+        table.style.setProperty('--cell-font-size', '0.72rem');
+        table.style.setProperty('--row-height', '30px');
+      } else if (numCols <= 40) {
+        table.style.setProperty('--th-font-size', '0.64rem');
+        table.style.setProperty('--cell-font-size', '0.62rem');
+        table.style.setProperty('--row-height', '26px');
+      } else {
+        table.style.setProperty('--th-font-size', '0.54rem');
+        table.style.setProperty('--cell-font-size', '0.52rem');
+        table.style.setProperty('--row-height', '23px');
+      }
+    }
+
+    function renderTable() {
+      const numCols = getSanitizedColumns();
+      const step = Math.max(1, parseInt(document.getElementById('timeStep').value, 10) || 1);
+      const quantum = Math.max(0, parseInt(document.getElementById('quantumVal').value, 10) || 0);
+      const showMeta = document.getElementById('showMetaCols').value === 'yes';
+      const showLetters = document.getElementById('showCellLetters').checked;
+
+      adjustFolioSizing(numCols);
+
+      rowsData.forEach(row => {
+        while (row.cells.length < MAX_COLUMNS) {
+          row.cells.push({ color: '', short: '', textColor: '#0f172a', text: '' });
+        }
+      });
+
+      const thead = document.getElementById('tableHead');
+      thead.innerHTML = '';
+      const trHead = document.createElement('tr');
+
+      const thProc = document.createElement('th');
+      thProc.className = 'sticky-col';
+      thProc.textContent = 'Proceso / E-S';
+      trHead.appendChild(thProc);
+
+      if (showMeta) {
+        const thPrio = document.createElement('th');
+        thPrio.className = 'meta-col';
+        thPrio.textContent = 'Prio';
+        thPrio.title = 'Prioridad';
+        trHead.appendChild(thPrio);
+
+        const thArr = document.createElement('th');
+        thArr.className = 'meta-col';
+        thArr.textContent = 'Lleg';
+        thArr.title = 'Tiempo de Llegada (ms)';
+        trHead.appendChild(thArr);
+      }
+
+      for (let c = 0; c < numCols; c++) {
+        const th = document.createElement('th');
+        const tStart = c * step;
+        th.textContent = tStart;
+        th.title = `Instante ${tStart} ms a ${(c + 1) * step} ms`;
+        if (quantum > 0 && (c + 1) % quantum === 0 && c !== numCols - 1) {
+          th.classList.add('quantum-divider');
+        }
+        trHead.appendChild(th);
+      }
+      thead.appendChild(trHead);
+
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+
+      const processRows = rowsData.filter(r => r.type === 'process');
+      const ioRows = rowsData.filter(r => r.type === 'io');
+      const queueRows = rowsData.filter(r => r.type === 'queue');
+
+      const totalColSpan = 1 + (showMeta ? 2 : 0) + numCols;
+
+      processRows.forEach(row => tbody.appendChild(buildRowElement(row, numCols, quantum, showMeta, showLetters)));
+
+      if (ioRows.length > 0) {
+        const divTr = document.createElement('tr');
+        divTr.className = 'row-section-divider';
+        const divTd = document.createElement('td');
+        divTd.colSpan = totalColSpan;
+        divTd.textContent = '💾 Recursos de Entrada / Salida (E/S) — Pinta o pulsa una letra (A, B, C...) sobre la celda para indicar quién lo ocupa';
+        divTr.appendChild(divTd);
+        tbody.appendChild(divTr);
+
+        ioRows.forEach(row => tbody.appendChild(buildRowElement(row, numCols, quantum, showMeta, showLetters)));
+      }
+
+      if (queueRows.length > 0) {
+        const divTr = document.createElement('tr');
+        divTr.className = 'row-section-divider';
+        const divTd = document.createElement('td');
+        divTd.colSpan = totalColSpan;
+        divTd.textContent = '📋 Estado de las Colas de Prioridad / Listos';
+        divTr.appendChild(divTd);
+        tbody.appendChild(divTr);
+
+        queueRows.forEach(row => tbody.appendChild(buildRowElement(row, numCols, quantum, showMeta, showLetters)));
+      }
+
+      updateHeaderInfo();
+    }
+
+    function buildRowElement(row, numCols, quantum, showMeta, showLetters) {
+      const tr = document.createElement('tr');
+      if (row.type === 'io') tr.className = 'row-io';
+      if (row.type === 'queue') tr.className = 'row-queue';
+
+      const tdLabel = document.createElement('td');
+      tdLabel.className = 'row-label-cell';
+
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.justifyContent = 'space-between';
+      wrap.style.gap = '2px';
+
+      const spanLbl = document.createElement('span');
+      spanLbl.className = 'editable-label';
+      spanLbl.contentEditable = 'true';
+      spanLbl.textContent = row.label;
+      spanLbl.onblur = (e) => {
+        row.label = e.target.textContent.trim() || row.label;
+      };
+
+      const delBtn = document.createElement('span');
+      delBtn.textContent = '×';
+      delBtn.title = 'Eliminar fila';
+      delBtn.style.cursor = 'pointer';
+      delBtn.style.color = '#94a3b8';
+      delBtn.style.fontWeight = '800';
+      delBtn.style.padding = '0 2px';
+      delBtn.onclick = () => removeRowById(row.id);
+
+      wrap.appendChild(spanLbl);
+      if (rowsData.length > 1) {
+        wrap.appendChild(delBtn);
+      }
+      tdLabel.appendChild(wrap);
+      tr.appendChild(tdLabel);
+
+      if (showMeta) {
+        const tdPrio = document.createElement('td');
+        tdPrio.className = 'meta-cell';
+        const inpPrio = document.createElement('input');
+        inpPrio.type = 'text';
+        inpPrio.className = 'meta-input';
+        inpPrio.value = row.priority;
+        inpPrio.oninput = (e) => { row.priority = e.target.value; };
+        tdPrio.appendChild(inpPrio);
+        tr.appendChild(tdPrio);
+
+        const tdArr = document.createElement('td');
+        tdArr.className = 'meta-cell';
+        const inpArr = document.createElement('input');
+        inpArr.type = 'text';
+        inpArr.className = 'meta-input';
+        inpArr.value = row.arrival;
+        inpArr.oninput = (e) => { row.arrival = e.target.value; };
+        tdArr.appendChild(inpArr);
+        tr.appendChild(tdArr);
+      }
+
+      for (let c = 0; c < numCols; c++) {
+        const cellObj = row.cells[c];
+        const td = document.createElement('td');
+
+        if (quantum > 0 && (c + 1) % quantum === 0 && c !== numCols - 1) {
+          td.classList.add('quantum-divider');
+        }
+
+        if (row.type === 'queue') {
+          td.className += ' queue-cell';
+          td.contentEditable = 'true';
+          td.textContent = cellObj.text || '';
+          td.oninput = (e) => {
+            cellObj.text = e.target.textContent;
+          };
+        } else {
+          td.className += ' time-cell';
+          td.tabIndex = 0; // Permite recibir foco y pulsaciones de teclado
+          applyCellVisual(td, cellObj, showLetters);
+
+          td.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            td.focus();
+            isMouseDown = true;
+            if (e.button === 2 || activeBrush.isEraser) {
+              paintMode = 'erase';
+              eraseCell(td, cellObj);
+            } else {
+              paintMode = 'paint';
+              paintCell(td, cellObj, row.type);
+            }
+          });
+
+          td.addEventListener('mouseenter', () => {
+            if (!isMouseDown) return;
+            if (paintMode === 'erase') {
+              eraseCell(td, cellObj);
+            } else {
+              paintCell(td, cellObj, row.type);
+            }
+          });
+
+          // Permitir escribir directamente la letra del proceso (A, B, C...) sobre las celdas de Recurso E/S (o cualquier celda)
+          td.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' || e.key === 'Delete') {
+              e.preventDefault();
+              eraseCell(td, cellObj);
+              return;
+            }
+            if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+              e.preventDefault();
+              const typedLetter = e.key.toUpperCase();
+              if (row.type === 'io') {
+                // Actualizar también el cuadro de letra E/S activa y colorear si estaba vacío
+                document.getElementById('ioProcessLetter').value = typedLetter;
+                if (!cellObj.color) {
+                  const ioState = PRESET_STATES.find(s => s.id === 'io');
+                  cellObj.color = activeBrush.isEraser ? ioState.color : activeBrush.color;
+                  cellObj.textColor = activeBrush.isEraser ? ioState.textColor : activeBrush.textColor;
+                }
+                cellObj.short = typedLetter;
+              } else {
+                if (!cellObj.color) {
+                  cellObj.color = activeBrush.isEraser ? '#22c55e' : activeBrush.color;
+                  cellObj.textColor = activeBrush.isEraser ? '#052e16' : activeBrush.textColor;
+                }
+                cellObj.short = typedLetter;
+              }
+              applyCellVisual(td, cellObj, true);
+            }
+          });
+
+          td.addEventListener('contextmenu', (e) => e.preventDefault());
+        }
+
+        tr.appendChild(td);
+      }
+
+      return tr;
+    }
+
+    function paintCell(td, cellObj, rowType) {
+      cellObj.color = activeBrush.color;
+      cellObj.textColor = activeBrush.textColor;
+
+      if (rowType === 'io') {
+        const ioLetter = (document.getElementById('ioProcessLetter').value || '').trim().toUpperCase();
+        // Si en la casilla "Letra en E/S" hay una letra (ej. A, B, C), se escribe esa letra en la fila de Recurso E/S
+        cellObj.short = ioLetter || activeBrush.short;
+      } else {
+        cellObj.short = activeBrush.short;
+      }
+
+      const showLetters = document.getElementById('showCellLetters').checked;
+      applyCellVisual(td, cellObj, showLetters);
+    }
+
+    function eraseCell(td, cellObj) {
+      cellObj.color = '';
+      cellObj.short = '';
+      cellObj.textColor = '#0f172a';
+      applyCellVisual(td, cellObj, true);
+    }
+
+    function applyCellVisual(td, cellObj, showLetters) {
+      td.style.backgroundColor = cellObj.color || '#ffffff';
+      td.style.color = cellObj.textColor || '#0f172a';
+      td.textContent = showLetters ? (cellObj.short || '') : '';
+    }
+
+    function toggleCellTextVisibility() { renderTable(); }
+    function toggleMetaColumns() { renderTable(); }
+    function updateTimeHeaders() { renderTable(); }
+    function updateQuantumVisuals() { renderTable(); }
+
+    function updateHeaderInfo() {
+      const title = document.getElementById('exerciseTitle').value.trim() || 'Cronograma de Planificación';
+      const step = Math.max(1, parseInt(document.getElementById('timeStep').value, 10) || 1);
+      const quantum = Math.max(0, parseInt(document.getElementById('quantumVal').value, 10) || 0);
+
+      document.getElementById('sheetTitleDisplay').textContent = title;
+      document.getElementById('scaleBadgeVal').textContent = `${step} ms / celda`;
+
+      const qBadge = document.getElementById('quantumBadge');
+      const qVal = document.getElementById('quantumBadgeVal');
+      if (quantum > 0) {
+        qBadge.style.display = 'flex';
+        qVal.textContent = `Q = ${quantum} (${quantum * step} ms)`;
+      } else {
+        qBadge.style.display = 'none';
+      }
+    }
+
+    function addProcessRow() {
+      const procCount = rowsData.filter(r => r.type === 'process').length;
+      rowsData.push({
+        id: 'proc_' + Date.now(),
+        type: 'process',
+        label: getAlphabetLabel(procCount),
+        priority: procCount + 1,
+        arrival: 0,
+        cells: createEmptyCells(MAX_COLUMNS)
+      });
+      document.getElementById('numProcesses').value = procCount + 1;
+      renderTable();
+    }
+
+    function addIORow() {
+      const ioCount = rowsData.filter(r => r.type === 'io').length;
+      rowsData.push({
+        id: 'io_' + Date.now(),
+        type: 'io',
+        label: `Recurso E/S ${ioCount + 1}`,
+        priority: '-',
+        arrival: '-',
+        cells: createEmptyCells(MAX_COLUMNS)
+      });
+      document.getElementById('numIO').value = ioCount + 1;
+      renderTable();
+    }
+
+    function addQueueRow() {
+      const qCount = rowsData.filter(r => r.type === 'queue').length;
+      rowsData.push({
+        id: 'queue_' + Date.now(),
+        type: 'queue',
+        label: qCount === 0 ? 'Cola de Listos' : `Cola Prioridad ${qCount + 1}`,
+        priority: '-',
+        arrival: '-',
+        cells: createEmptyCells(MAX_COLUMNS)
+      });
+      renderTable();
+    }
+
+    function removeRowById(id) {
+      rowsData = rowsData.filter(r => r.id !== id);
+      document.getElementById('numProcesses').value = rowsData.filter(r => r.type === 'process').length;
+      document.getElementById('numIO').value = rowsData.filter(r => r.type === 'io').length;
+      renderTable();
+    }
+
+    function clearCellsOnly() {
+      rowsData.forEach(row => {
+        row.cells.forEach(c => {
+          c.color = '';
+          c.short = '';
+          c.text = '';
+        });
+      });
+      renderTable();
+    }
+
+    async function exportToImage() {
+      const exportEl = document.getElementById('export-area');
+      const title = (document.getElementById('exerciseTitle').value || 'planificacion_so')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '');
+
+      try {
+        const canvas = await html2canvas(exportEl, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true
+        });
+        const link = document.createElement('a');
+        link.download = `${title || 'tabla_prioridad_folio'}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } catch (err) {
+        alert('Error al exportar la imagen: ' + err.message);
+      }
+    }
+  </script>
+</body>
+</html>
